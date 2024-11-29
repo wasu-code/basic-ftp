@@ -212,26 +212,41 @@ class FTPClient:
             return res.ok
 
     def download_file(self, remote_path, local_path):
+        # if file exists -> prompt for confirmation
+        if os.path.exists(local_path):
+            overwrite = input(
+                f"The file '{local_path}' already exists. Do you want to overwrite it? (y/N): "
+            )
+            if overwrite.lower() != "y":
+                print("Download aborted.")
+                return False
+
         data_socket = self._open_data_connection()
         self._send_command(f"RETR {remote_path}")
         res = self._get_response()
         print(res)
+
         if not res.code == 150:
             print("Server didn't start data transfer\n")
             return False
-        # TODO ask if override if exists
+
         with open(local_path, "wb") as f:
             while True:
                 data = data_socket.recv(1024)
                 if not data:
                     break
                 f.write(data)
+
         data_socket.close()
+
         res = self._get_response()
         print(res)
+
         if res.ok:
+            print(f"File downloaded successfully to '{local_path}'.")
             return True
         else:
+            print("File download failed.")
             return False
 
     def _open_data_connection(self):
