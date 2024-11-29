@@ -480,3 +480,5 @@ if __name__ == "__main__":
 # help i verify
 
 # copy: [WinError 2] Nie można odnaleźć określonego pliku: './ftptest.txt'
+
+# /path/to/file.txt path/to doesnt exist on server
