@@ -90,11 +90,49 @@ class FTPClient:
         print(f">> Sending command: {command}")
         self.control_socket.sendall((command + "\r\n").encode("utf-8"))
 
+    # def _get_response(self):
+    #     response = self.control_socket.recv(1024).decode("utf-8")
+    #     response_code = (
+    #         int(response.split(" ", 1)[0]) if response.split(" ", 1)[0].isdigit() else 0
+    #     )
+    #     return ExtendedResponse("<< " + response, code=response_code)
+
     def _get_response(self):
-        response = self.control_socket.recv(1024).decode("utf-8")
-        response_code = (
-            int(response.split(" ", 1)[0]) if response.split(" ", 1)[0].isdigit() else 0
-        )
+        response = ""
+        response_code = None
+        is_multiline = False
+
+        while True:
+            # Receive data in chunks
+            data = self.control_socket.recv(1024).decode("utf-8")
+            response += data
+
+            lines = response.splitlines()
+
+            # if no code yet get it from the first line
+            if response_code is None and len(lines) > 0:
+                first_line = lines[0]
+                if len(first_line) >= 4 and first_line[:3].isdigit():
+                    response_code = int(first_line[:3])
+                    is_multiline = (
+                        first_line[3] == "-"
+                    )  # multi-line response is indicated by code followed by '-' (123-Text)
+
+            # in multiline response wait for same code followed by space (that's the last line of response)
+            if is_multiline and len(lines) > 0:
+                last_line = lines[-1]
+                if (
+                    len(last_line) >= 4
+                    and last_line[:3].isdigit()
+                    and int(last_line[:3]) == response_code
+                    and last_line[3] == " "
+                ):
+                    break  # End of multi-line response
+
+            # in single-line responses, we can stop on CRLF
+            if not is_multiline and "\r\n" in data:
+                break
+
         return ExtendedResponse("<< " + response, code=response_code)
 
     def close(self):
@@ -151,6 +189,7 @@ class FTPClient:
         if not res.code == 150:
             print("Server didn't start data transfer\n")
             return False
+        # TODO ask if override if exists
         with open(local_path, "wb") as f:
             while True:
                 data = data_socket.recv(1024)
@@ -324,6 +363,7 @@ def main():
             case "rm":
                 target_operation = client.delete_file(full_path())
             case "cp":
+                # TODO filename is required only in source part, should be added to target path automatically
                 if param1.startswith("ftp://"):
                     target_operation = client.download_file(remote_path, param2)
                 else:
@@ -390,10 +430,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-# kod, znacznik kontunuacji(more), opis (dla użytkownika lub zinterpretować - gdy są to parametry)
-
-
 # usftp cp c:\katalog\plik.txt ftp://user:pass@127.0.0.1:21/test/
 
 # tryb ciągły?
@@ -401,3 +437,5 @@ if __name__ == "__main__":
 # W zależności od tego, jakie polecenie zostanie wysłane, mogą być wymagane również dodatkowe parametry
 
 # co jak zostanie zresetowane połączenie z serwerem w trakcie?
+
+# help i verify

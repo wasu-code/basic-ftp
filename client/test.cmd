@@ -2,11 +2,11 @@
 setlocal EnableDelayedExpansion
 
 REM Define the array of commands
-set c[1]=python usftp.py ls ftp://tst:pass@localhost:21/aaa
-set c[2]=python usftp.py cp ftp://tst:pass@localhost:21/aaa/ftptest.txt ./texttttt.txt
-set c[3]=start notepad
-set c[4]=cd
-set c[5]=exit
+set c[1]=python usftp.py mkdir ftp://tst:pass@localhost:21/ newdir
+set c[2]=python usftp.py ls ftp://tst:pass@localhost:21/
+set c[3]=python usftp.py cp ./ftptest.txt ftp://tst:pass@localhost:21/newdir
+set c[4]=python usftp.py cp ftp://tst:pass@localhost:21/newdir/ftptest.txt ./
+set c[5]=python usftp.py rm ftp://tst:pass@localhost:21/newdir ftptest.txt
 
 REM Check for a command-line argument
 if "%1" neq "" (
