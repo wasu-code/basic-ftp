@@ -34,9 +34,8 @@ set /p choice="Enter your choice: "
 
 REM Validate user input
 if not defined c[%choice%] (
-    echo Invalid choice. Please try again.
-    pause
-    goto menu
+    echo Invalid choice. Exiting...
+    goto end
 )
 
 REM Execute the selected command

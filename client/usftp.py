@@ -19,10 +19,6 @@ class ExtendedResponse(str):
 
 
 def is_private_ip(ip):
-    """
-    Sprawdza, czy dany adres IP należy do zakresu prywatnych adresów IP.
-    Zwraca True, jeśli adres jest prywatny (za NAT), w przeciwnym razie False.
-    """
     try:
         ip_obj = ipaddress.ip_address(ip)
         return ip_obj.is_private
@@ -159,7 +155,12 @@ class FTPClient:
 
     def delete_file(self, path):
         self._send_command(f"DELE {path}")
-        print(self._get_response())
+        res = self._get_response()
+        print(res)
+        if "550 Permission denied" in res:
+            print(
+                "Possible causes:\n1)Your account can't delete file\n2)You're attempting to delete folder with rm instead of rmdir"
+            )
 
     def check_last_modification_time(self, remote_path):
         """
@@ -218,7 +219,7 @@ class FTPClient:
                 f"The file '{local_path}' already exists. Do you want to overwrite it? (y/N): "
             )
             if overwrite.lower() != "y":
-                print("Download aborted.")
+                print("Download aborted.\n")
                 return False
 
         data_socket = self._open_data_connection()
@@ -243,10 +244,10 @@ class FTPClient:
         print(res)
 
         if res.ok:
-            print(f"File downloaded successfully to '{local_path}'.")
+            print(f"File downloaded successfully to '{local_path}'.\n")
             return True
         else:
-            print("File download failed.")
+            print("File download failed.\n")
             return False
 
     def _open_data_connection(self):
@@ -255,7 +256,7 @@ class FTPClient:
         print(response)
 
         if response.code != 227:
-            print("Failed to start data connection.")
+            print("Failed to start data connection.\n")
             raise Exception(f"Error opening data connection: {response.strip()}")
 
         start = response.find("(") + 1
@@ -266,7 +267,7 @@ class FTPClient:
 
         if is_private_ip(ip_address):
             print(
-                f"Detected private IP: {ip_address}. Using server IP instead: {self.host}."
+                f"Detected private IP: {ip_address}. Using server IP instead: {self.host}.\n"
             )
         else:
             # replace provided (incorrect) ip with ip of server
@@ -295,7 +296,7 @@ class FTPClient:
 
 def parse_command_line():
     if len(sys.argv) < 3:
-        print("Usage: usftp [operation] [param1] [param2]")
+        print("Usage: usftp <operation> <param1> [param2]")
         sys.exit(1)
 
     operation = sys.argv[1]
@@ -407,10 +408,19 @@ def main():
             case "rm":
                 client.delete_file(full_path())
             case "cp":
-                # TODO filename is required only in source part, should be added to target path automatically
                 if param1.startswith("ftp://"):
-                    client.download_file(remote_path, param2)
+                    local_path = param2
+                    filename = os.path.basename(remote_path)
+                    if not param2.endswith(filename):
+                        local_path = os.path.join(param2, filename).replace("\\", "/")
+                    client.download_file(remote_path, local_path)
                 else:
+                    filename = os.path.basename(param1)
+                    if not remote_path.endswith(filename):
+                        # if filename not included in path (points to directory only) append it
+                        remote_path = os.path.join(remote_path, filename).replace(
+                            "\\", "/"
+                        )
                     client.upload_file(param1, remote_path)
             case "mv":
                 if param1.startswith("ftp://"):
