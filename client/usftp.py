@@ -3,6 +3,7 @@ import sys
 from urllib.parse import urlparse
 import os
 import ipaddress
+from datetime import datetime
 
 # https://datatracker.ietf.org/doc/html/rfc959 (page 40) 4.2.2 Numeric  Order List of Reply Codes
 
@@ -90,13 +91,6 @@ class FTPClient:
         print(f">> Sending command: {command}")
         self.control_socket.sendall((command + "\r\n").encode("utf-8"))
 
-    # def _get_response(self):
-    #     response = self.control_socket.recv(1024).decode("utf-8")
-    #     response_code = (
-    #         int(response.split(" ", 1)[0]) if response.split(" ", 1)[0].isdigit() else 0
-    #     )
-    #     return ExtendedResponse("<< " + response, code=response_code)
-
     def _get_response(self):
         response = ""
         response_code = None
@@ -167,18 +161,54 @@ class FTPClient:
         self._send_command(f"DELE {path}")
         print(self._get_response())
 
+    def check_last_modification_time(self, remote_path):
+        """
+        Check the last modification time of a file on the FTP server.
+        """
+        self._send_command(f"MDTM {remote_path}")
+
+        res = self._get_response()
+        if res.code != 550:
+            print(res)
+        if res.code == 213:  # 213 -> modification time is returned successfully
+            mdtm_str = res.split(" ", 2)[2].strip()
+            try:
+                return datetime.strptime(mdtm_str, "%Y%m%d%H%M%S.%f")
+            except ValueError:
+                return datetime.strptime(mdtm_str, "%Y%m%d%H%M%S")
+        else:
+            return None
+
     def upload_file(self, local_path, remote_path):
+        local_mtime = datetime.fromtimestamp(os.path.getmtime(local_path))
+
+        # Check if the remote file exists and get its modification time
+        remote_mtime = self.check_last_modification_time(remote_path)
+        if remote_mtime:
+            if remote_mtime > local_mtime:
+                # remote file is newer -> prompt for confirmation
+                overwrite = input(
+                    f"Remote file '{remote_path}' is newer ({remote_mtime}) than your local file ({local_mtime}). Overwrite? (y/N): "
+                )
+                if overwrite.lower() != "y":
+                    print("Upload canceled.")
+                    return False
+
         with open(local_path, "rb") as f:
             data_socket = self._open_data_connection()
             self._send_command(f"STOR {remote_path}")
             res = self._get_response()
             print(res)
-            if not res.ok:
+            if res.code != 150:
                 return False
             data_socket.sendall(f.read())
             data_socket.close()
             res = self._get_response()
             print(res)
+            if res.ok:
+                print("File uploaded")
+            else:
+                print("Upload failed")
             return res.ok
 
     def download_file(self, remote_path, local_path):
@@ -352,22 +382,21 @@ def main():
         client.login()
         client.setup()
 
-        target_operation = None
         match operation:
             case "ls":
-                target_operation = client.list_directory(remote_path)
+                client.list_directory(remote_path)
             case "mkdir":
-                target_operation = client.make_directory(full_path())
+                client.make_directory(full_path())
             case "rmdir":
-                target_operation = client.remove_directory(full_path())
+                client.remove_directory(full_path())
             case "rm":
-                target_operation = client.delete_file(full_path())
+                client.delete_file(full_path())
             case "cp":
                 # TODO filename is required only in source part, should be added to target path automatically
                 if param1.startswith("ftp://"):
-                    target_operation = client.download_file(remote_path, param2)
+                    client.download_file(remote_path, param2)
                 else:
-                    target_operation = client.upload_file(param1, remote_path)
+                    client.upload_file(param1, remote_path)
             case "mv":
                 if param1.startswith("ftp://"):
                     # direction server->client
@@ -387,9 +416,6 @@ def main():
                         print("Upload failed, nothing deleted.")
             case _:
                 print("Unknown operation.")
-
-        if target_operation:
-            target_operation()
     except Exception as e:
         print(f"Something went wrong. \n{e}\n Closing...")
     finally:
@@ -434,8 +460,8 @@ if __name__ == "__main__":
 
 # tryb ciągły?
 
-# W zależności od tego, jakie polecenie zostanie wysłane, mogą być wymagane również dodatkowe parametry
-
 # co jak zostanie zresetowane połączenie z serwerem w trakcie?
 
 # help i verify
+
+# copy: [WinError 2] Nie można odnaleźć określonego pliku: './ftptest.txt'
