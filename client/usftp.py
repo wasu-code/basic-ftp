@@ -180,6 +180,32 @@ class FTPClient:
         else:
             return None
 
+    def compare_file_size(self, remote_path, local_path):
+        """
+        Check the file size of a file on the FTP server and compare it with the local file size.
+        Returns True if the file sizes match, otherwise False.
+        """
+
+        if os.path.exists(local_path):
+            local_size = os.path.getsize(local_path)
+        else:
+            local_size = 0
+
+        self._send_command(f"SIZE {remote_path}")
+        res = self._get_response()
+        print(res)
+        if res.code == 550:
+            print(f"Failed to retrieve size for file: {remote_path}\n")
+            return False
+        elif res.code == 213:  # 213 -> size is returned successfully
+            remote_size = int(res.split(" ", 2)[2].strip())
+            print(f"Remote file size: {remote_size}, Local file size: {local_size}\n")
+
+            return remote_size == local_size
+        else:
+            print("Unable to compare size for files.\n")
+            return False
+
     def upload_file(self, local_path, remote_path):
         local_mtime = datetime.fromtimestamp(os.path.getmtime(local_path))
 
@@ -243,7 +269,7 @@ class FTPClient:
         res = self._get_response()
         print(res)
 
-        if res.ok:
+        if res.ok and self.compare_file_size(remote_path, local_path):
             print(f"File downloaded successfully to '{local_path}'.\n")
             return True
         else:
@@ -425,8 +451,11 @@ def main():
             case "mv":
                 if param1.startswith("ftp://"):
                     # direction server->client
-                    # download file
-                    success = client.download_file(remote_path, param2)
+                    local_path = param2
+                    filename = os.path.basename(remote_path)
+                    if not param2.endswith(filename):
+                        local_path = os.path.join(param2, filename).replace("\\", "/")
+                    success = client.download_file(remote_path, local_path)
                     # check if success
                     if success:
                         # remove from server
@@ -441,8 +470,8 @@ def main():
                         print("Upload failed, nothing deleted.")
             case _:
                 print("Unknown operation.")
-    except Exception as e:
-        print(f"Something went wrong. \n{e}\n Closing...")
+    # except Exception as e:
+    #     print(f"Something went wrong. \n{e}\n Closing...")
     finally:
         client.close()
 
@@ -468,8 +497,7 @@ def main():
 
 # 5.  Copy
 #     Command: cp
-#     Usage:  cp <ftp_url>/<remote_path>/<file/folder> <local_path>/<file/folder>
-#             cp <local_path>/<file/folder> <ftp_url>/<remote_path>/<file/folder>
+#     Usage:
 
 # 6.  Move
 #     Command: mv
@@ -480,10 +508,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# usftp cp c:\katalog\plik.txt ftp://user:pass@127.0.0.1:21/test/
-
-# tryb ciągły?
 
 # co jak zostanie zresetowane połączenie z serwerem w trakcie?
 
