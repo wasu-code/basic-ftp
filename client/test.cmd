@@ -7,6 +7,8 @@ set c[2]=python usftp.py ls ftp://tst:pass@localhost:21/
 set c[3]=python usftp.py cp ./ftptest.txt ftp://tst:pass@localhost:21/newdir
 set c[4]=python usftp.py cp ftp://tst:pass@localhost:21/newdir/ftptest.txt ./
 set c[5]=python usftp.py rm ftp://tst:pass@localhost:21/newdir ftptest.txt
+set c[6]=python usftp.py mv ./mvtest.txt ftp://tst:pass@localhost:21/
+set c[7]=python usftp.py mv ftp://tst:pass@localhost:21/mvtest.txt ./
 
 REM Check for a command-line argument
 if "%1" neq "" (

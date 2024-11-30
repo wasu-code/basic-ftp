@@ -3,9 +3,11 @@ import sys
 from urllib.parse import urlparse
 import os
 import ipaddress
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # https://datatracker.ietf.org/doc/html/rfc959 (page 40) 4.2.2 Numeric  Order List of Reply Codes
+
+TIMEZONE_OFFSET = 1
 
 
 class ExtendedResponse(str):
@@ -174,9 +176,14 @@ class FTPClient:
         if res.code == 213:  # 213 -> modification time is returned successfully
             mdtm_str = res.split(" ", 2)[2].strip()
             try:
-                return datetime.strptime(mdtm_str, "%Y%m%d%H%M%S.%f")
+                mdtm_utc = datetime.strptime(mdtm_str, "%Y%m%d%H%M%S.%f")
             except ValueError:
-                return datetime.strptime(mdtm_str, "%Y%m%d%H%M%S")
+                mdtm_utc = datetime.strptime(mdtm_str, "%Y%m%d%H%M%S")
+
+            # Add the timezone offset (in hours) to the UTC time
+            offset = timedelta(hours=TIMEZONE_OFFSET)
+            mdtm_local = mdtm_utc + offset
+            return mdtm_local
         else:
             return None
 
@@ -211,6 +218,7 @@ class FTPClient:
 
         # Check if the remote file exists and get its modification time
         remote_mtime = self.check_last_modification_time(remote_path)
+        print(remote_mtime, local_mtime)
         if remote_mtime:
             if remote_mtime > local_mtime:
                 # remote file is newer -> prompt for confirmation
@@ -456,22 +464,32 @@ def main():
                     if not param2.endswith(filename):
                         local_path = os.path.join(param2, filename).replace("\\", "/")
                     success = client.download_file(remote_path, local_path)
-                    # check if success
                     if success:
-                        # remove from server
                         client.delete_file(remote_path)
                 else:
                     # direction client->server
+                    filename = os.path.basename(param1)
+                    if not remote_path.endswith(filename):
+                        # if filename not included in path (points to directory only) append it
+                        remote_path = os.path.join(remote_path, filename).replace(
+                            "\\", "/"
+                        )
                     success = client.upload_file(param1, remote_path)
                     if success:
-                        # TODO remove local file
-                        pass
+                        # remove local file
+                        try:
+                            os.remove(param1)
+                            print(
+                                f"Local file '{param1}' has been removed after successful upload.\n"
+                            )
+                        except Exception as e:
+                            print(f"Failed to remove local file '{param1}': {e}")
                     else:
-                        print("Upload failed, nothing deleted.")
+                        print("Upload failed, nothing deleted.\n")
             case _:
                 print("Unknown operation.")
-    # except Exception as e:
-    #     print(f"Something went wrong. \n{e}\n Closing...")
+    except Exception as e:
+        print(f"Something went wrong. \n{e}\n Closing...")
     finally:
         client.close()
 
