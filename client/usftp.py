@@ -38,10 +38,29 @@ class FTPClient:
         self.control_socket = None
 
     def connect(self):
-        print(f"Connecting to {self.host}:{self.port}")
-        self.control_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.control_socket.connect((self.host, self.port))
-        print(self._get_response())  # Welcome message
+        try:
+            print(f"Connecting to {self.host}:{self.port}")
+            self.control_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.control_socket.connect((self.host, self.port))
+            print(self._get_response())  # Welcome message
+        except socket.gaierror:
+            print(
+                f"Error: Unable to resolve FTP server address: {self.host}. Please check the hostname."
+            )
+            sys.exit(1)
+        except ConnectionRefusedError:
+            print(
+                f"Error: Connection refused by {self.host}:{self.port}. The server may be offline or not accepting connections."
+            )
+            sys.exit(1)
+        except TimeoutError:
+            print(
+                f"Error: Connection to {self.host}:{self.port} timed out. Please try again later."
+            )
+            sys.exit(1)
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            sys.exit(1)
 
     def login(self):
         # Provide username
@@ -339,12 +358,145 @@ def parse_command_line():
     return operation, param1, param2
 
 
+def validate(validators={}):
+    """
+    Validates parameters based on specified validation rules, with separate checks for failures and warnings.
+
+    Args:
+        validators (dict): A dictionary where keys are validation function names
+                           and values are lists of parameters to validate.
+
+    Returns:
+        tuple: (success: bool, warnings: bool)
+               - success: True if validation passed, False if failed.
+               - warnings: True if warnings are present, False otherwise.
+    """
+
+    ### Validation functions that cause failure
+    def is_valid_path(path):
+        return isinstance(path, str) and len(path.strip()) > 0 and "\\" not in path
+
+    def is_valid_ftp_url(url):
+        # At least ftp prefix and hostname
+        if not isinstance(url, str) or not url.startswith("ftp://"):
+            return False
+        parsed = urlparse(url)
+        return bool(parsed.hostname)
+
+    ### Validation functions that issue warnings
+    def is_file_path(path):
+        # Warn if the path does not end with a file and extension
+        return "." in path.split("/")[-1]
+
+    def is_file(path):
+        return os.path.isfile(path)
+
+    ###
+    fail_validations = {
+        "is_valid_path": is_valid_path,
+        "is_valid_ftp_url": is_valid_ftp_url,
+        "is_file": is_file,
+    }
+
+    warn_validations = {
+        "is_file_path": is_file_path,
+    }
+
+    has_warning = False
+
+    # Perform validations that cause failures
+    for validator, params in validators.items():
+        if validator in fail_validations:
+            for param in params:
+                if not fail_validations[validator](param):
+                    print(f"Validation failed for '{param}' with {validator}")
+                    return False, False
+
+    # Perform validations that issue warnings
+    for validator, params in validators.items():
+        if validator in warn_validations:
+            for param in params:
+                if not warn_validations[validator](param):
+                    print(
+                        f"Warning: '{param}' may not follow best practices for for {validator}"
+                    )
+                    has_warning = True
+
+    return True, has_warning
+
+
+def validate_with_prompt(validators={}):
+    """
+    Wrapper for the validate function that prompts user confirmation
+    if warnings are present.
+
+    Returns:
+        bool: True if operation should continue, False otherwise.
+    """
+    success, warnings = validate(validators)
+    if not success:
+        print("Validation failed. Aborting operation.")
+        return False
+
+    if warnings:
+        response = (
+            input("Warnings are present. Do you want to continue? (y/N): ")
+            .strip()
+            .lower()
+        )
+        if response != "y":
+            print("Operation aborted by the user.")
+            return False
+
+    return True
+
+
+def help():
+    print(
+        """
+1.  List Directory
+    Command: ls
+    Usage: ls <ftp_url>
+
+2.  Make/create directory
+    Command: mkdir
+    Usage: mkdir <ftp_url> <folder_name>
+       or: mkdir <ftp_url>/<folder_name>
+
+3.  Remove directory
+    Command: rmdir
+    Usage: rmdir <ftp_url> <folder_name>
+       or: rmdir <ftp_url>/<folder_name>
+
+4.  Remove file
+    Command: rm
+    Usage: rm <ftp_url> <file_name>
+       or: rm <ftp_url>/<folder_name>
+
+5.  Copy
+    Command: cp
+    Example: cp ./file.txt ftp://user:pass@localhost:21/
+         or: cp ftp://user:pass@localhost:21/file.txt ./
+
+6.  Move
+    Command: mv
+    Example: mv ./file.txt ftp://user:pass@localhost:21/
+         or: mv ftp://user:pass@localhost:21/file.txt ./
+
+"""
+    )
+
+
 def main():
+    if "help" in sys.argv[1]:
+        help()
+        sys.exit(1)
+
     operation, param1, param2 = parse_command_line()
 
-    if param1.startswith("ftp://"):
+    if param1.startswith("ftp://") and validate({"is_valid_ftp_url": [param1]})[0]:
         parsed_url = urlparse(param1)
-    elif param2.startswith("ftp://"):
+    elif param2.startswith("ftp://") and validate({"is_valid_ftp_url": [param2]})[0]:
         parsed_url = urlparse(param2)
     else:
         print("Invalid FTP URL.")
@@ -368,86 +520,39 @@ def main():
             "\\", "/"
         )
 
-    def validateParams(operationType, params=[]):
-        """
-        Validates the parameters required for each FTP operation based on the operation type.
-
-        Args:
-            operationType (str): The type of FTP operation (e.g., "ls", "mkdir", "rmdir", "rm", "cp", "mv").
-            params: A list containing the parameters for the operation.
-
-        Returns:
-            bool: True if the parameters are valid, False otherwise.
-        """
-
-        def is_valid_path(path):
-            return isinstance(path, str) and len(path.strip()) > 0
-
-        def is_valid_ftp_url(url):
-            return isinstance(url, str) and url.startswith("ftp://")
-
-        match operationType:
-            case "ls":
-                # Validate `path`
-                if len(params) < 1:
-                    print("Not enough parameters provided. Required 1")
-                    return False
-                if len(params) > 1:
-                    print("WARN: too much parameters")
-                if not is_valid_path(params[0]):
-                    print("Invalid or missing 'path' for 'ls' operation.")
-                    return False
-            case "mkdir" | "rmdir" | "rm":
-                # Validate `full_path`
-                if not is_valid_path(params[0]):
-                    print(
-                        f"Invalid or missing 'full_path' for '{operationType}' operation."
-                    )
-                    return False
-            case "cp":
-                # Validate `param1` and `param2`
-                if len(params) != 2:
-                    print("This operation takes exactly 2 parameters. ")
-                    return False
-                if not (
-                    is_valid_ftp_url(params[0]) and is_valid_path(params[1])
-                ) or not (is_valid_ftp_url(params[1]) and is_valid_path(params[0])):
-                    print(
-                        "Invalid local_path or remote_path. One should be a remote path on FTP server (starting with ftp://) and the other should be a local path on your machine"
-                    )
-                    return False
-            case "mv":
-                # Validate `param1` and `param2`
-                # TODO
-                pass
-            case _:
-                print("Unknown operation type.")
-                return False
-
-        # If all checks pass
-        return True
-
+    client.connect()
     try:
-        client.connect()
         client.login()
         client.setup()
 
         match operation:
             case "ls":
-                client.list_directory(remote_path)
+                if validate_with_prompt({"is_valid_path": [remote_path]}):
+                    client.list_directory(remote_path)
             case "mkdir":
-                client.make_directory(full_path())
+                target_path = full_path()
+                if validate_with_prompt({"is_valid_path": [target_path]}):
+                    client.make_directory(target_path)
             case "rmdir":
-                client.remove_directory(full_path())
+                target_path = full_path()
+                if validate_with_prompt({"is_valid_path": [target_path]}):
+                    client.remove_directory(target_path)
             case "rm":
-                client.delete_file(full_path())
+                target_path = full_path()
+                if validate_with_prompt(
+                    {"is_valid_path": [target_path], "is_file_path": [target_path]}
+                ):
+                    client.delete_file(target_path)
             case "cp":
                 if param1.startswith("ftp://"):
                     local_path = param2
                     filename = os.path.basename(remote_path)
                     if not param2.endswith(filename):
                         local_path = os.path.join(param2, filename).replace("\\", "/")
-                    client.download_file(remote_path, local_path)
+                    if validate_with_prompt(
+                        {"is_valid_path": [remote_path, local_path]}
+                    ):
+                        client.download_file(remote_path, local_path)
                 else:
                     filename = os.path.basename(param1)
                     if not remote_path.endswith(filename):
@@ -455,7 +560,10 @@ def main():
                         remote_path = os.path.join(remote_path, filename).replace(
                             "\\", "/"
                         )
-                    client.upload_file(param1, remote_path)
+                    if validate_with_prompt(
+                        {"is_valid_path": [remote_path, param1], "is_file": [param1]}
+                    ):
+                        client.upload_file(param1, remote_path)
             case "mv":
                 if param1.startswith("ftp://"):
                     # direction server->client
@@ -463,9 +571,13 @@ def main():
                     filename = os.path.basename(remote_path)
                     if not param2.endswith(filename):
                         local_path = os.path.join(param2, filename).replace("\\", "/")
-                    success = client.download_file(remote_path, local_path)
-                    if success:
-                        client.delete_file(remote_path)
+
+                    if validate_with_prompt(
+                        {"is_valid_path": [remote_path, local_path]}
+                    ):
+                        success = client.download_file(remote_path, local_path)
+                        if success:
+                            client.delete_file(remote_path)
                 else:
                     # direction client->server
                     filename = os.path.basename(param1)
@@ -474,63 +586,29 @@ def main():
                         remote_path = os.path.join(remote_path, filename).replace(
                             "\\", "/"
                         )
-                    success = client.upload_file(param1, remote_path)
-                    if success:
-                        # remove local file
-                        try:
-                            os.remove(param1)
-                            print(
-                                f"Local file '{param1}' has been removed after successful upload.\n"
-                            )
-                        except Exception as e:
-                            print(f"Failed to remove local file '{param1}': {e}")
-                    else:
-                        print("Upload failed, nothing deleted.\n")
+                    if validate_with_prompt(
+                        {"is_valid_path": [remote_path, param1], "is_file": [param1]}
+                    ):
+                        success = client.upload_file(param1, remote_path)
+                        if success:
+                            # remove local file
+                            try:
+                                os.remove(param1)
+                                print(
+                                    f"Local file '{param1}' has been removed after successful upload.\n"
+                                )
+                            except Exception as e:
+                                print(f"Failed to remove local file '{param1}': {e}")
+                        else:
+                            print("Upload failed, nothing deleted.\n")
             case _:
                 print("Unknown operation.")
+                help()
     except Exception as e:
         print(f"Something went wrong. \n{e}\n Closing...")
     finally:
         client.close()
 
 
-# def help():
-#     print(
-#         """
-# 1.  List Directory
-#     Command: ls
-#     Usage: ls <ftp_url>
-
-# 2.  Make/create directory
-#     Command: mkdir
-#     Usage: mkdir <ftp_url>[remote_path] [relative_path]/<folder_name>
-
-# 3.  Remove directory
-#     Command: rmdir
-#     Usage: rmdir <ftp_url>[remote_path] [relative_path]/<folder_name>
-
-# 4.  Remove file
-#     Command: rm
-#     Usage: rm <ftp_url>[remote_path] [relative_path]/<file_name>
-
-# 5.  Copy
-#     Command: cp
-#     Usage:
-
-# 6.  Move
-#     Command: mv
-
-# """
-#     )
-
-
 if __name__ == "__main__":
     main()
-
-# co jak zostanie zresetowane połączenie z serwerem w trakcie?
-
-# help i verify
-
-# copy: [WinError 2] Nie można odnaleźć określonego pliku: './ftptest.txt'
-
-# /path/to/file.txt path/to doesnt exist on server
