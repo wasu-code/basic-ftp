@@ -1,7 +1,6 @@
 import os
 import socket
 import threading
-import time
 from pathlib import Path
 from tinydb import TinyDB, Query
 import bcrypt
@@ -66,24 +65,31 @@ class FTPSession(threading.Thread):
         self.data_socket = None
         self.passive_port = None
         self.passive_socket = None
-        self.start_time = time.time()
-        self.last_activity = time.time()
+        # self.start_time = time.time()
+        # self.last_activity = time.time()
 
     def send(self, message):
         self.client_socket.sendall(f"{message}\r\n".encode("utf-8"))
         print(f"Sent: {message}")
 
     def receive(self):
-        data = self.client_socket.recv(1024).decode("utf-8").strip()
-        self.last_activity = time.time()
-        print(f"Received: {data}")
-        return data
+        try:
+            data = self.client_socket.recv(1024).decode("utf-8").strip()
+            # self.last_activity = time.time()
+            print(f"Received: {data}")
+            return data
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
 
     def login(self, username, password=None):
         user = db.get(Query().username == username)
         if user and (
             user["password"] is None
-            or bcrypt.checkpw(password.encode(), user["password"].encode())
+            or (
+                password
+                and bcrypt.checkpw(password.encode(), user["password"].encode())
+            )
         ):
             self.logged_in = True
             self.user = username
@@ -113,22 +119,42 @@ class FTPSession(threading.Thread):
                 if self.passive_port > PASSIVE_PORT_RANGE[1]:
                     self.send("425 Can't open passive connection.")
                     return
+        # Inform the client of the passive mode
         ip = self.address[0].replace(".", ",")
         p1 = self.passive_port // 256
         p2 = self.passive_port % 256
         self.send(f"227 Entering Passive Mode ({ip},{p1},{p2}).")
-        self.data_socket, _ = self.passive_socket.accept()
+
+        try:
+            self.passive_socket.settimeout(DATA_TIMEOUT)
+            self.data_socket, _ = self.passive_socket.accept()
+        except socket.timeout:
+            # Handle the timeout
+            print(
+                f"Timeout: No connection to data socket was made within {DATA_TIMEOUT}. Closing data connection"
+            )
+            self.send("425 Data connection timed out.")
+            self.passive_socket.close()  # Close the passive socket
+            return
+        finally:
+            # Close the passive socket after accepting the connection
+            self.passive_socket.close()
 
     def handle_client(self):
         self.send("220 Welcome to UŚ FTP Server")
+        self.client_socket.settimeout(LOGIN_TIMEOUT)
         try:
-            login_timeout = time.time() + LOGIN_TIMEOUT
+            # login_timeout = time.time() + LOGIN_TIMEOUT
             while not self.logged_in:
-                if time.time() > login_timeout:
-                    self.send("421 Login timeout, closing connection.")
+                # if time.time() > login_timeout:
+                #     self.send("421 Login timeout, closing connection.")
+                #     self.client_socket.close()
+                #     return
+                data = self.receive()
+                if not data:
+                    print("closing client socket")
                     self.client_socket.close()
                     return
-                data = self.receive()
                 cmd, *args = data.split()
                 if cmd.upper() == "USER":
                     self.send("331 Username received, need password.")
@@ -137,17 +163,18 @@ class FTPSession(threading.Thread):
                     password = args[0] if args else None
                     if self.login(username, password):
                         self.send("230 User logged in, proceed.")
+                        self.client_socket.settimeout(SESSION_TIMEOUT)
                     else:
-                        self.send("530 Login incorrect.")
+                        self.send("530 Credentials incorrect.")
                 else:
                     self.send("530 Please login with USER and PASS.")
 
             while True:
                 """handle commands"""
-                if time.time() - self.last_activity > SESSION_TIMEOUT:
-                    self.send("421 Session timeout, closing connection.")
-                    self.client_socket.close()
-                    return
+                # if time.time() - self.last_activity > SESSION_TIMEOUT:
+                #     self.send("421 Session timeout, closing connection.")
+                #     self.client_socket.close()
+                #     return
                 data = self.receive()
                 if not data:
                     break
@@ -195,9 +222,12 @@ class FTPSession(threading.Thread):
 
                     case _:
                         self.send("502 Command not implemented.")
-
+        except socket.timeout:
+            self.send("421 Session timeout, closing connection.")
+            self.client_socket.close()
         except Exception as e:
-            self.send(f"500 Internal server error: {e}")
+            self.send(f"500 Internal server error")
+            print(f"Error: {e}")
             self.client_socket.close()
 
     def run(self):

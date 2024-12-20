@@ -1,15 +1,9 @@
-Nie można gotowego servera ftp
-
-przynajmniej pasywny tryb
-
-zakres portów dla pasywnego (do skonfigurowania)
-
 user z hasłem i bez (anonimowy) do konfiguracji
 
 - [ ] co gdy jeden user się zaloguje, czy drugi łączący się jeż just zalogowany
 - [ ] user nie może wyjść ponad swój katalog domowy (parser ścieżek obsługuje i względne i bezwzględne, ale obie muszą być względem katalogu domowego)
 - [ ] if transfer in data connection doesn't start after eg. 10s -> close data conn
-- [ ] co jak nie ma config file (try:)
+- [x] co jak nie ma config file (try:)
 - [ ] utwórz brakujące foldery pośrednie /istnieje/nie/nie/target
 - [ ] żeby nie wyszedł ponad nie tylko główny folder ale i folder usera
 - [ ] powinien pokazywać ścieżkę jako absolutną ale względem folderu głównego
@@ -17,9 +11,8 @@ user z hasłem i bez (anonimowy) do konfiguracji
 - [ ] czy ktoś może się połączyć do nie swojej sesji
 - [ ] specyfikacja mówi jakie MUSZĄ być MODE, STRU, TYPE https://datatracker.ietf.org/doc/html/rfc959#section-5 . TYPE I - image/binary, ASCII do tekstu; STRU wystarczy nam file
 - [x] NOP polecenie do podtrzymania sesji tylko
-
-jak klient się połączy ale nie zaloguje to zamknięcie sesji.
-tak samo po zalogowaniu ale bez aktywności (tu dłuższy czas)
+- [x] jak klient się połączy ale nie zaloguje to zamknięcie sesji.
+- [x] tak samo po zalogowaniu ale bez aktywności (tu dłuższy czas)
 
 ---
 
@@ -33,7 +26,7 @@ Serwer powinien obsługiwać **przynajmniej**:
 
 - [x] tryb pasywny (PASV),
 - [x] określenie listy portów TCP dla połączeń trybu pasywnego,
-- [ ] jednego użytkownika z hasłem,
+- [x] jednego użytkownika z hasłem,
 - [ ] użytkownika anonimowego,
 - [x] wysyłanie listy plików,
 - [ ] wysyłanie oraz odbieranie pliku.
