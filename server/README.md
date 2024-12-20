@@ -27,7 +27,7 @@ Serwer powinien obsługiwać **przynajmniej**:
 - [x] tryb pasywny (PASV),
 - [x] określenie listy portów TCP dla połączeń trybu pasywnego,
 - [x] jednego użytkownika z hasłem,
-- [ ] użytkownika anonimowego,
+- [x] użytkownika anonimowego,
 - [x] wysyłanie listy plików,
 - [ ] wysyłanie oraz odbieranie pliku.
 
@@ -45,7 +45,7 @@ Konfiguracja serwera może się odbywać z linii poleceń lub za pośrednictwem 
 
 - [x] określenie katalogu głównego FTP w lokalnym systemie plików,
 - [x] wskazania nazwy i hasła użytkownika,
-- [ ] włączenie lub zablokowanie dostępu anonimowego,
+- [x] włączenie lub zablokowanie dostępu anonimowego,
 - [x] określenie puli portów TCP dla połączeń pasywnych (np. min, max),
 - [x] określenie interfejsu (adresu IP) na którym serwer będzie nasłuchiwał połączeń (domyślnie, na wszystkich aktywnych, adres IP 0.0.0.0).
 

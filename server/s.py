@@ -80,9 +80,12 @@ class FTPSession(threading.Thread):
     def login(self, username, password=None):
         user = db.get(Query().username == username)
         if user and (
-            user["password"] is None
-            or (
+            (  # password for this user is not required and anonymous access is allowed
+                user["password"] is None and ALLOW_ANONYMOUS is True
+            )
+            or (  # password for this user is required and matches the provided
                 password
+                and user["password"]
                 and bcrypt.checkpw(password.encode(), user["password"].encode())
             )
         ):
@@ -164,6 +167,8 @@ class FTPSession(threading.Thread):
 
             while True:
                 """handle commands"""
+                if self.client_socket.fileno() == -1:
+                    break  # connection is closed
                 data = self.receive()
                 if not data:
                     break
