@@ -55,7 +55,8 @@ if not db.contains(Query().username == "anonymous"):
 
 
 class FTPSession(threading.Thread):
-    def __init__(self, client_socket, address):
+
+    def __init__(self, client_socket, address, ftp_server):
         super().__init__()
         self.client_socket = client_socket
         self.address = address
@@ -65,22 +66,16 @@ class FTPSession(threading.Thread):
         self.data_socket = None
         self.passive_port = None
         self.passive_socket = None
-        # self.start_time = time.time()
-        # self.last_activity = time.time()
+        self.ftp_server = ftp_server
 
     def send(self, message):
         self.client_socket.sendall(f"{message}\r\n".encode("utf-8"))
         print(f"Sent: {message}")
 
     def receive(self):
-        try:
-            data = self.client_socket.recv(1024).decode("utf-8").strip()
-            # self.last_activity = time.time()
-            print(f"Received: {data}")
-            return data
-        except Exception as e:
-            print(f"Error: {e}")
-            return None
+        data = self.client_socket.recv(1024).decode("utf-8").strip()
+        print(f"Received: {data}")
+        return data
 
     def login(self, username, password=None):
         user = db.get(Query().username == username)
@@ -142,14 +137,10 @@ class FTPSession(threading.Thread):
 
     def handle_client(self):
         self.send("220 Welcome to UŚ FTP Server")
-        self.client_socket.settimeout(LOGIN_TIMEOUT)
+        self.client_socket.settimeout(LOGIN_TIMEOUT)  # Set a timeout for login
         try:
-            # login_timeout = time.time() + LOGIN_TIMEOUT
             while not self.logged_in:
-                # if time.time() > login_timeout:
-                #     self.send("421 Login timeout, closing connection.")
-                #     self.client_socket.close()
-                #     return
+                """login process"""
                 data = self.receive()
                 if not data:
                     print("closing client socket")
@@ -163,7 +154,9 @@ class FTPSession(threading.Thread):
                     password = args[0] if args else None
                     if self.login(username, password):
                         self.send("230 User logged in, proceed.")
-                        self.client_socket.settimeout(SESSION_TIMEOUT)
+                        self.client_socket.settimeout(
+                            SESSION_TIMEOUT
+                        )  # User logged in, set a timeout for session
                     else:
                         self.send("530 Credentials incorrect.")
                 else:
@@ -171,10 +164,6 @@ class FTPSession(threading.Thread):
 
             while True:
                 """handle commands"""
-                # if time.time() - self.last_activity > SESSION_TIMEOUT:
-                #     self.send("421 Session timeout, closing connection.")
-                #     self.client_socket.close()
-                #     return
                 data = self.receive()
                 if not data:
                     break
@@ -232,6 +221,7 @@ class FTPSession(threading.Thread):
 
     def run(self):
         self.handle_client()
+        return self.ftp_server.remove_session(self)
 
 
 class FTPServer:
@@ -253,6 +243,12 @@ class FTPServer:
             print(f"Unexpected error: {e}")
             sys.exit(1)
 
+    def remove_session(self, session):
+        # Remove the session from the sessions list
+        if session in self.sessions:
+            self.sessions.remove(session)
+            print(f"Session removed. Active sessions: {len(self.sessions)}")
+
     def start(self):
         print(f"FTP Server running on port {FTP_PORT}")
         try:
@@ -260,11 +256,15 @@ class FTPServer:
                 1.0
             )  # Set a timeout to allow checking for interrupt
             while True:
+                print(
+                    f"Awaiting new connections. {len(self.sessions)} active connections"
+                )
                 try:
                     client_socket, address = self.server_socket.accept()
                 except socket.timeout:
                     continue  # Allows the loop to periodically check for KeyboardInterrupt
-                session = FTPSession(client_socket, address)
+                print("Wild connection appeared!")
+                session = FTPSession(client_socket, address, ftp_server=self)
                 session.start()
                 self.sessions.append(session)
         except KeyboardInterrupt:
