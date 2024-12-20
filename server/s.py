@@ -6,19 +6,45 @@ from pathlib import Path
 from tinydb import TinyDB, Query
 import bcrypt
 import configparser
+import sys
+
+"""
+Do konfiguracji używane są dwa pliki 
+- <nazwa>.conf (nazwa do konfiguracji niżej, domyślnie ftpserver.conf)
+- users.json (opcjonalne, zostanie utworzony automatycznie jeśli nie podany)
+"""
 
 # Configurable Settings via Config File
 CONFIG_FILE = "ftpserver.conf"
 config = configparser.ConfigParser()
-config.read(CONFIG_FILE)
+try:
+    config.read(CONFIG_FILE)
+    FTP_IP = config["SERVER"].get("Host", "0.0.0.0")
+    FTP_PORT = int(config["SERVER"].get("Port", "21"))
+    PASSIVE_PORT_RANGE = tuple(
+        map(int, config["SERVER"].get("PassivePortRange", "50000,50100").split(","))
+    )
+    SESSION_TIMEOUT = int(config["SERVER"].get("SessionTimeout", "300"))
+    LOGIN_TIMEOUT = int(config["SERVER"].get("LoginTimeout", "30"))
+    DATA_TIMEOUT = int(config["SERVER"].get("DataTimeout", "60"))
+    ROOT_DIR = Path(config["SERVER"].get("RootDirectory")).resolve()
+    ALLOW_ANONYMOUS = config["SERVER"].getboolean("AllowAnonymous", False)
+except configparser.NoSectionError as e:
+    print(f"Error: Missing section in configuration file: {e}", file=sys.stderr)
+    sys.exit(1)
+except configparser.NoOptionError as e:
+    print(f"Error: Missing option in configuration file: {e}", file=sys.stderr)
+    sys.exit(1)
+except ValueError as e:
+    print(f"Error: Invalid value in configuration file: {e}", file=sys.stderr)
+    sys.exit(1)
+except FileNotFoundError as e:
+    print(f"Error: Configuration file not found: {e}", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f"Unexpected error: {e}", file=sys.stderr)
+    sys.exit(1)
 
-FTP_PORT = int(config["SERVER"]["Port"])
-PASSIVE_PORT_RANGE = tuple(map(int, config["SERVER"]["PassivePortRange"].split(",")))
-SESSION_TIMEOUT = int(config["SERVER"]["SessionTimeout"])
-LOGIN_TIMEOUT = int(config["SERVER"]["LoginTimeout"])
-DATA_TIMEOUT = int(config["SERVER"]["DataTimeout"])
-ROOT_DIR = Path(config["SERVER"]["RootDirectory"]).resolve()
-ALLOW_ANONYMOUS = config.getboolean("SERVER", "AllowAnonymous")
 
 db = TinyDB("users.json")
 
@@ -26,16 +52,6 @@ db = TinyDB("users.json")
 if not db.contains(Query().username == "anonymous"):
     db.insert(
         {"username": "anonymous", "password": None, "home": str(ROOT_DIR / "anonymous")}
-    )
-
-# xx remove it (this is only for testing)
-if not db.contains(Query().username == "tst"):
-    db.insert(
-        {
-            "username": "tst",
-            "password": bcrypt.hashpw(b"pass", bcrypt.gensalt()).decode(),
-            "home": str(ROOT_DIR / "user1"),
-        }
     )
 
 
@@ -55,10 +71,12 @@ class FTPSession(threading.Thread):
 
     def send(self, message):
         self.client_socket.sendall(f"{message}\r\n".encode("utf-8"))
+        print(f"Sent: {message}")
 
     def receive(self):
         data = self.client_socket.recv(1024).decode("utf-8").strip()
         self.last_activity = time.time()
+        print(f"Received: {data}")
         return data
 
     def login(self, username, password=None):
@@ -125,6 +143,7 @@ class FTPSession(threading.Thread):
                     self.send("530 Please login with USER and PASS.")
 
             while True:
+                """handle commands"""
                 if time.time() - self.last_activity > SESSION_TIMEOUT:
                     self.send("421 Session timeout, closing connection.")
                     self.client_socket.close()
@@ -133,36 +152,50 @@ class FTPSession(threading.Thread):
                 if not data:
                     break
                 cmd, *args = data.split()
-                if cmd.upper() == "PASV":
-                    self.handle_passive_mode()
-                elif cmd.upper() == "LIST":
-                    if not self.data_socket:
-                        self.send("425 Use PASV first.")
-                    else:
-                        self.send("150 Here comes the directory listing.")
-                        files = "\r\n".join(os.listdir(self.cwd))
-                        self.data_socket.sendall(files.encode("utf-8"))
-                        self.data_socket.close()
-                        self.data_socket = None
-                        self.send("226 Directory send ok.")
-                elif cmd.upper() == "PWD":
-                    self.send(f'257 "{self.cwd}" is the current directory.')
-                elif cmd.upper() == "QUIT":
-                    self.send("221 Goodbye.")
-                    self.client_socket.close()
-                    break
-                elif cmd.upper() in ["TYPE", "MODE", "STRU"]:
-                    # TODO
-                    if cmd.upper() == "TYPE" and args and args[0].upper() == "I":
-                        self.send("200 Type set to I (binary).")
-                    elif cmd.upper() == "MODE" and args and args[0].upper() == "S":
-                        self.send("200 Mode set to S (stream).")
-                    elif cmd.upper() == "STRU" and args and args[0].upper() == "F":
-                        self.send("200 Structure set to F (file).")
-                    else:
-                        self.send("504 Command not implemented for parameter.")
-                else:
-                    self.send("502 Command not implemented.")
+
+                match cmd.upper():
+                    case "PASV":
+                        self.handle_passive_mode()
+
+                    case "LIST":
+                        if not self.data_socket:
+                            self.send("425 Use PASV first.")
+                        else:
+                            self.send("150 Here comes the directory listing.")
+                            files = "\r\n".join(os.listdir(self.cwd))
+                            self.data_socket.sendall(files.encode("utf-8"))
+                            self.data_socket.close()
+                            self.data_socket = None
+                            self.send("226 Directory send ok.")
+
+                    case "PWD":
+                        # TODO don't expose full path; ftp root directory as start of absolute path
+                        self.send(f'257 "{self.cwd}" is the current directory.')
+
+                    case "TYPE" | "MODE" | "STRU":
+                        # Handle TYPE, MODE, STRU with arguments
+                        # TODO
+                        if cmd.upper() == "TYPE" and args and args[0].upper() == "I":
+                            self.send("200 Type set to I (binary).")
+                        elif cmd.upper() == "MODE" and args and args[0].upper() == "S":
+                            self.send("200 Mode set to S (stream).")
+                        elif cmd.upper() == "STRU" and args and args[0].upper() == "F":
+                            self.send("200 Structure set to F (file).")
+                        else:
+                            self.send("504 Command not implemented for parameter.")
+
+                    case "NOP":
+                        # No Operation
+                        self.send("200 Command okay.")
+
+                    case "QUIT":
+                        self.send("221 Goodbye.")
+                        self.client_socket.close()
+                        break
+
+                    case _:
+                        self.send("502 Command not implemented.")
+
         except Exception as e:
             self.send(f"500 Internal server error: {e}")
             self.client_socket.close()
@@ -173,16 +206,34 @@ class FTPSession(threading.Thread):
 
 class FTPServer:
     def __init__(self, host="0.0.0.0", port=FTP_PORT):
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.bind((host, port))
-        self.server_socket.listen(5)
-        self.sessions = []
+        try:
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket.bind((host, port))
+            self.server_socket.listen(5)
+            self.sessions = []
+        except OSError as e:
+            if e.errno == 10048:
+                print(
+                    f"Error: Port {FTP_PORT} for ip {FTP_IP} is in use. Change target port in configuration file {CONFIG_FILE}."
+                )
+            else:
+                print(f"Unexpected error: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            sys.exit(1)
 
     def start(self):
         print(f"FTP Server running on port {FTP_PORT}")
         try:
+            self.server_socket.settimeout(
+                1.0
+            )  # Set a timeout to allow checking for interrupt
             while True:
-                client_socket, address = self.server_socket.accept()
+                try:
+                    client_socket, address = self.server_socket.accept()
+                except socket.timeout:
+                    continue  # Allows the loop to periodically check for KeyboardInterrupt
                 session = FTPSession(client_socket, address)
                 session.start()
                 self.sessions.append(session)
@@ -192,5 +243,5 @@ class FTPServer:
 
 
 if __name__ == "__main__":
-    server = FTPServer()
+    server = FTPServer(host=FTP_IP)
     server.start()
