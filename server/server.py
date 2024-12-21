@@ -394,8 +394,12 @@ class FTPSession(threading.Thread):
         except socket.timeout:
             self.send("421 Session timeout, closing connection.")
             self.client_socket.close()
+        except ConnectionResetError:
+            print("Connection reset by peer.")
+            self.client_socket.close()
         except Exception as e:
-            self.send(f"500 Internal server error")
+            if self.client_socket.fileno() != -1:
+                self.send(f"500 Internal server error")
             print(f"Error: {e}")
             self.client_socket.close()
 
