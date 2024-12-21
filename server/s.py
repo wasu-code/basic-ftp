@@ -29,19 +29,19 @@ try:
     ROOT_DIR = Path(config["SERVER"].get("RootDirectory")).resolve()
     ALLOW_ANONYMOUS = config["SERVER"].getboolean("AllowAnonymous", False)
 except configparser.NoSectionError as e:
-    print(f"Error: Missing section in configuration file: {e}", file=sys.stderr)
+    print(f"Error: Missing section in configuration file: {e}")
     sys.exit(1)
 except configparser.NoOptionError as e:
-    print(f"Error: Missing option in configuration file: {e}", file=sys.stderr)
+    print(f"Error: Missing option in configuration file: {e}")
     sys.exit(1)
 except ValueError as e:
-    print(f"Error: Invalid value in configuration file: {e}", file=sys.stderr)
+    print(f"Error: Invalid value in configuration file: {e}")
     sys.exit(1)
 except FileNotFoundError as e:
-    print(f"Error: Configuration file not found: {e}", file=sys.stderr)
+    print(f"Error: Configuration file not found: {e}")
     sys.exit(1)
 except Exception as e:
-    print(f"Unexpected error: {e}", file=sys.stderr)
+    print(f"Unexpected error: {e}")
     sys.exit(1)
 
 
@@ -63,6 +63,7 @@ class FTPSession(threading.Thread):
         self.logged_in = False
         self.user = None
         self.cwd = None
+        self.home = None
         self.data_socket = None
         self.passive_port = None
         self.passive_socket = None
@@ -91,18 +92,51 @@ class FTPSession(threading.Thread):
         ):
             self.logged_in = True
             self.user = username
-            self.cwd = Path(user["home"]).resolve()
+            user_home = Path(user["home"]).resolve()
+            self.cwd = user_home
+            self.home = user_home
             self.cwd.mkdir(parents=True, exist_ok=True)
             return True
         return False
 
-    def sanitize_path(self, path):
+    def sanitize_path(self, path, check_full_path=True):
+        """
+        Return the absolute path if it is within the user's home directory.
+
+        Parameters:
+            path (str): The path to sanitize.
+            check_full_path (bool): If True, check the existence of the full path.
+                                    If False, skip the existence check for the last fragment.
+        """
         if not self.cwd:
             raise PermissionError("User not logged in.")
-        resolved_path = (self.cwd / path).resolve()
-        if not str(resolved_path).startswith(str(self.cwd)):
+
+        if path.startswith("/"):  # client uses absolute path
+            resolved_path = (self.home / path.lstrip("/")).resolve()
+        else:  # client uses relative path
+            resolved_path = (self.cwd / path).resolve()
+
+        if not str(resolved_path).startswith(str(self.home)):
             raise PermissionError("Access outside home directory is forbidden.")
+
+        if check_full_path:
+            if not resolved_path.exists():
+                raise PermissionError("File or directory does not exist.")
+        else:
+            # Check all parts of the path except the last fragment
+            parent_path = resolved_path.parent
+            if not parent_path.exists():
+                raise PermissionError("Parent directory does not exist.")
+
+        print(
+            f"resolved_path: {resolved_path}\n cwd: {self.cwd}\n path: {path}\n home: {self.home}"
+        )
         return resolved_path
+
+    def ftp_path(self, path):
+        """Return the path relative to the user's home directory using forward slashes"""
+        relative_path = path.relative_to(self.home)
+        return "/" + str(relative_path).replace("\\", "/")
 
     def handle_passive_mode(self):
         self.passive_port = PASSIVE_PORT_RANGE[0]
@@ -183,15 +217,48 @@ class FTPSession(threading.Thread):
                             self.send("425 Use PASV first.")
                         else:
                             self.send("150 Here comes the directory listing.")
-                            files = "\r\n".join(os.listdir(self.cwd))
-                            self.data_socket.sendall(files.encode("utf-8"))
+                            # files = "\r\n".join(os.listdir(self.cwd))
+                            # self.data_socket.sendall(files.encode("utf-8"))
+                            # self.data_socket.close()
+                            # self.data_socket = None
+                            # self.send("226 Directory send ok.")
+                            entries = os.listdir(self.cwd)
+                            response = []
+                            for entry in entries:
+                                entry_path = self.cwd / entry
+                                if entry_path.is_dir():
+                                    response.append(
+                                        f"drwxr-xr-x 2 user group 4096 Jan 1 00:00 {entry}"
+                                    )
+                                else:
+                                    size = entry_path.stat().st_size
+                                    response.append(
+                                        f"-rw-r--r-- 1 user group {size} Jan 1 00:00 {entry}"
+                                    )
+                            self.data_socket.sendall(
+                                "\r\n".join(response).encode("utf-8")
+                            )
                             self.data_socket.close()
                             self.data_socket = None
                             self.send("226 Directory send ok.")
 
                     case "PWD":
-                        # TODO don't expose full path; ftp root directory as start of absolute path
-                        self.send(f'257 "{self.cwd}" is the current directory.')
+                        self.send(
+                            f'257 "{self.ftp_path(self.cwd)}" is the current directory.'
+                        )
+
+                    case "CWD":
+                        if not args:
+                            self.send("501 No directory specified.")
+                        else:
+                            try:
+                                path = self.sanitize_path(args[0])
+                                self.cwd = path
+                                self.send(
+                                    f'250 CWD command successful. "{self.ftp_path(self.cwd)}" is current directory.'
+                                )
+                            except PermissionError:
+                                self.send("550 Permission denied.")
 
                     case "TYPE" | "MODE" | "STRU":
                         # Handle TYPE, MODE, STRU with arguments
@@ -204,6 +271,32 @@ class FTPSession(threading.Thread):
                             self.send("200 Structure set to F (file).")
                         else:
                             self.send("504 Command not implemented for parameter.")
+
+                    case "STOR":
+                        if not self.data_socket:
+                            self.send("425 Use PASV first.")
+                        else:
+                            filename = args[0]
+                            try:
+                                path = self.sanitize_path(
+                                    filename, check_full_path=False
+                                )
+                            except PermissionError as e:
+                                self.send("550 Permission denied.")
+                                print(f"Error: {e}")
+                                self.data_socket.close()
+                                self.data_socket = None
+                                continue
+                            self.send("150 Ok to send data.")
+                            with open(path, "wb") as f:
+                                while True:
+                                    data = self.data_socket.recv(1024)
+                                    if not data:
+                                        break
+                                    f.write(data)
+                            self.data_socket.close()
+                            self.data_socket = None
+                            self.send("226 Transfer complete.")
 
                     case "NOP":
                         # No Operation

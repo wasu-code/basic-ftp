@@ -1,22 +1,25 @@
-user z hasłem i bez (anonimowy) do konfiguracji
+# Server FTP
+
+## Scenariusze testowania
 
 - [ ] co gdy jeden user się zaloguje, czy drugi łączący się jeż just zalogowany
 - [ ] user nie może wyjść ponad swój katalog domowy (parser ścieżek obsługuje i względne i bezwzględne, ale obie muszą być względem katalogu domowego)
-- [ ] if transfer in data connection doesn't start after eg. 10s -> close data conn
+- [x] if transfer in data connection doesn't start after eg. 10s -> close data conn
 - [x] co jak nie ma config file (try:)
 - [ ] utwórz brakujące foldery pośrednie /istnieje/nie/nie/target
 - [ ] żeby nie wyszedł ponad nie tylko główny folder ale i folder usera
-- [ ] powinien pokazywać ścieżkę jako absolutną ale względem folderu głównego
-      da się jakoś przez dwukropek dostać?
+- [x] powinien pokazywać ścieżkę jako absolutną ale względem folderu głównego
+- [ ] da się jakoś przez dwukropek dostać?
 - [ ] czy ktoś może się połączyć do nie swojej sesji
 - [ ] specyfikacja mówi jakie MUSZĄ być MODE, STRU, TYPE https://datatracker.ietf.org/doc/html/rfc959#section-5 . TYPE I - image/binary, ASCII do tekstu; STRU wystarczy nam file
 - [x] NOP polecenie do podtrzymania sesji tylko
 - [x] jak klient się połączy ale nie zaloguje to zamknięcie sesji.
 - [x] tak samo po zalogowaniu ale bez aktywności (tu dłuższy czas)
+- [ ] timeout for data transfer time?
 
 ---
 
-# Treśc zadania
+## Treść zadania
 
 Zadanie polega za implementacji prostego serwera FTP dla sieci IPv4, w dowolnie wybranym języku programowania. Implementacja protokołu FTP nie musi być pełna ale nie może wykorzystywać gotowej kontrolki FTP, tylko musi bazować na surowych gniazdach (socket) TCP.
 
@@ -34,9 +37,9 @@ Serwer powinien obsługiwać **przynajmniej**:
 W wariancie optymalnym powinien umożliwiać:
 
 - [x] logowanie użytkowania (USER, PASS),
-- [ ] pobieranie bieżącego katalogu (PWD),
+- [x] pobieranie bieżącego katalogu (PWD),
 - [ ] zmianę katalogu w górę (CDUP),
-- [ ] wchodzenie do katalogu (CWD),
+- [x] wchodzenie do katalogu (CWD),
 - [ ] tworzenie i usuwanie katalogu (MKD, RMD),
 - [x] pobieranie listy plików (LIST),
 - [ ] wysyłanie, pobieranie i usuwanie pliku (STOR, RETR, DELE).
