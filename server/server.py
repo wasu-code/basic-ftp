@@ -449,7 +449,12 @@ class FTPServer:
                 self.sessions.append(session)
         except KeyboardInterrupt:
             print("Shutting down FTP server.")
+            if len(self.sessions) > 0:
+                print("Waiting for active sessions to close...")
+                for session in self.sessions:
+                    session.join()
             self.server_socket.close()
+            print("Goodbye!")
 
 
 if __name__ == "__main__":
