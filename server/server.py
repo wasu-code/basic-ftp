@@ -258,8 +258,8 @@ class FTPSession(threading.Thread):
                                 self.send(
                                     f'250 CWD command successful. "{self.ftp_path(self.cwd)}" is current directory.'
                                 )
-                            except PermissionError:
-                                self.send("550 Permission denied.")
+                            except PermissionError as e:
+                                self.send(f"550 Permission denied. {e}")
 
                     case "CDUP":
                         try:
@@ -267,8 +267,8 @@ class FTPSession(threading.Thread):
                             self.send(
                                 f'250 CDUP command successful. "{self.ftp_path(self.cwd)}" is current directory.'
                             )
-                        except PermissionError:
-                            self.send("550 Permission denied.")
+                        except PermissionError as e:
+                            self.send(f"550 Permission denied. {e}")
 
                     case "MKD":
                         if not args:
@@ -280,8 +280,8 @@ class FTPSession(threading.Thread):
                                 )
                                 path.mkdir(parents=True, exist_ok=True)
                                 self.send(f"257 Directory created: {args[0]}.")
-                            except PermissionError:
-                                self.send("550 Permission denied.")
+                            except PermissionError as e:
+                                self.send(f"550 Permission denied. {e}")
 
                     case "RMD":
                         if not args:
@@ -291,8 +291,8 @@ class FTPSession(threading.Thread):
                                 path = self.sanitize_path(args[0])
                                 path.rmdir()
                                 self.send(f"250 Directory deleted: {args[0]}.")
-                            except PermissionError:
-                                self.send("550 Permission denied.")
+                            except PermissionError as e:
+                                self.send(f"550 Permission denied. {e}")
 
                     case "TYPE" | "MODE" | "STRU":
                         # Handle TYPE, MODE, STRU with arguments
@@ -319,8 +319,7 @@ class FTPSession(threading.Thread):
                                     filename, check_full_path=False
                                 )
                             except PermissionError as e:
-                                self.send("550 Permission denied.")
-                                print(f"Error: {e}")
+                                self.send(f"550 Permission denied. {e}")
                                 self.data_socket.close()
                                 self.data_socket = None
                                 continue
@@ -346,8 +345,7 @@ class FTPSession(threading.Thread):
                             try:
                                 path = self.sanitize_path(filename)
                             except PermissionError as e:
-                                self.send("550 Permission denied.")
-                                print(f"Error: {e}")
+                                self.send(f"550 Permission denied. {e}")
                                 self.data_socket.close()
                                 self.data_socket = None
                                 continue
@@ -365,7 +363,18 @@ class FTPSession(threading.Thread):
                             self.data_socket = None
                             self.send("226 Transfer complete.")
 
-                    case "NOP":
+                    case "DELE":
+                        if not args:
+                            self.send("501 No file specified.")
+                        else:
+                            try:
+                                path = self.sanitize_path(args[0])
+                                path.unlink()
+                                self.send(f"250 File deleted: {args[0]}.")
+                            except PermissionError as e:
+                                self.send(f"550 Permission denied. {e}")
+
+                    case "NOP" | "NOOP":
                         # No Operation
                         self.send("200 Command okay.")
 
