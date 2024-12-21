@@ -15,7 +15,7 @@
 - [x] NOP polecenie do podtrzymania sesji tylko
 - [x] jak klient się połączy ale nie zaloguje to zamknięcie sesji.
 - [x] tak samo po zalogowaniu ale bez aktywności (tu dłuższy czas)
-- [ ] timeout for data transfer time?
+- [x] timeout for data transfer time?
 
 ---
 

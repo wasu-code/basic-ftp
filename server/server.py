@@ -6,6 +6,7 @@ from tinydb import TinyDB, Query
 import bcrypt
 import configparser
 import sys
+from datetime import datetime
 
 """
 Do konfiguracji używane są dwa pliki 
@@ -224,24 +225,26 @@ class FTPSession(threading.Thread):
                             self.send("425 Use PASV first.")
                         else:
                             self.send("150 Here comes the directory listing.")
-                            # files = "\r\n".join(os.listdir(self.cwd))
-                            # self.data_socket.sendall(files.encode("utf-8"))
-                            # self.data_socket.close()
-                            # self.data_socket = None
-                            # self.send("226 Directory send ok.")
                             entries = os.listdir(self.cwd)
                             response = []
                             for entry in entries:
                                 entry_path = self.cwd / entry
-                                if entry_path.is_dir():
-                                    response.append(
-                                        f"drwxr-xr-x 2 user group 4096 Jan 1 00:00 {entry}"
-                                    )
-                                else:
-                                    size = entry_path.stat().st_size
-                                    response.append(
-                                        f"-rw-r--r-- 1 user group {size} Jan 1 00:00 {entry}"
-                                    )
+                                stats = entry_path.stat()
+                                permissions = (
+                                    "drwxr-xr-x"
+                                    if entry_path.is_dir()
+                                    else "-rw-r--r--"
+                                )
+                                n_links = stats.st_nlink
+                                owner = "user"  # Placeholder
+                                group = "group"  # Placeholder
+                                size = stats.st_size
+                                mtime = datetime.fromtimestamp(stats.st_mtime).strftime(
+                                    "%b %d %H:%M"
+                                )
+                                response.append(
+                                    f"{permissions} {n_links} {owner} {group} {size} {mtime} {entry}"
+                                )
                             self.data_socket.sendall(
                                 "\r\n".join(response).encode("utf-8")
                             )
@@ -428,7 +431,7 @@ class FTPServer:
             sys.exit(1)
 
     def remove_session(self, session):
-        # Remove the session from the sessions list
+        """Remove the session from the sessions list"""
         if session in self.sessions:
             self.sessions.remove(session)
             print(f"Session removed. Active sessions: {len(self.sessions)}")
