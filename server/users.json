@@ -1,14 +1,1 @@
-{
-  "_default": {
-    "1": {
-      "username": "anonymous",
-      "password": null,
-      "home": "D:\\STD\\[]MAG SEM II\\PI\\ftp\\server\\ftp\\anonymous"
-    },
-    "2": {
-      "username": "tst",
-      "password": "$2b$12$5LOQB0gnh/D8FCWE68SKveC3qJKJm3jrEpC8LXmGuihtLHSxqM3v2",
-      "home": "D:\\STD\\[]MAG SEM II\\PI\\ftp\\server\\ftp\\user1"
-    }
-  }
-}
+{"_default": {"1": {"username": "anonymous", "password": null, "home": "D:\\STD\\[]MAG SEM II\\PI\\ftp\\server\\ftp\\anonymous"}, "2": {"username": "tst", "password": "$2b$12$5LOQB0gnh/D8FCWE68SKveC3qJKJm3jrEpC8LXmGuihtLHSxqM3v2", "home": "D:\\STD\\[]MAG SEM II\\PI\\ftp\\server\\ftp\\user1"}, "3": {"username": "beta", "password": "$2b$12$ON5s4FeROOR2ESO.qJTiTeUQvZ/e2pBy9bpgjdVEsipwGJK5UqrnG", "home": "ftp\\beta"}}}

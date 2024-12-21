@@ -68,6 +68,7 @@ class FTPSession(threading.Thread):
         self.passive_port = None
         self.passive_socket = None
         self.ftp_server = ftp_server
+        self.transfer_type = "I"
 
     def send(self, message):
         self.client_socket.sendall(f"{message}\r\n".encode("utf-8"))
@@ -262,9 +263,12 @@ class FTPSession(threading.Thread):
 
                     case "TYPE" | "MODE" | "STRU":
                         # Handle TYPE, MODE, STRU with arguments
-                        # TODO
-                        if cmd.upper() == "TYPE" and args and args[0].upper() == "I":
+                        if args and args[0].upper() == "I":
+                            self.transfer_type = "I"
                             self.send("200 Type set to I (binary).")
+                        elif args and args[0].upper() == "A":
+                            self.transfer_type = "A"
+                            self.send("200 Type set to A (ASCII).")
                         elif cmd.upper() == "MODE" and args and args[0].upper() == "S":
                             self.send("200 Mode set to S (stream).")
                         elif cmd.upper() == "STRU" and args and args[0].upper() == "F":
@@ -288,12 +292,42 @@ class FTPSession(threading.Thread):
                                 self.data_socket = None
                                 continue
                             self.send("150 Ok to send data.")
-                            with open(path, "wb") as f:
+                            mode = "wb" if self.transfer_type == "I" else "w"
+                            with open(path, mode) as f:
                                 while True:
                                     data = self.data_socket.recv(1024)
                                     if not data:
                                         break
+                                    if self.transfer_type == "A":
+                                        data = data.decode("utf-8")
                                     f.write(data)
+                            self.data_socket.close()
+                            self.data_socket = None
+                            self.send("226 Transfer complete.")
+
+                    case "RETR":
+                        if not self.data_socket:
+                            self.send("425 Use PASV first.")
+                        else:
+                            filename = args[0]
+                            try:
+                                path = self.sanitize_path(filename)
+                            except PermissionError as e:
+                                self.send("550 Permission denied.")
+                                print(f"Error: {e}")
+                                self.data_socket.close()
+                                self.data_socket = None
+                                continue
+                            self.send("150 Will send data.")
+                            mode = "rb" if self.transfer_type == "I" else "r"
+                            with open(path, mode) as f:
+                                while True:
+                                    data = f.read(1024)
+                                    if not data:
+                                        break
+                                    if self.transfer_type == "A":
+                                        data = data.encode("utf-8")
+                                    self.data_socket.sendall(data)
                             self.data_socket.close()
                             self.data_socket = None
                             self.send("226 Transfer complete.")

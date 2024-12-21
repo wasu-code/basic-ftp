@@ -3,15 +3,15 @@
 ## Scenariusze testowania
 
 - [ ] co gdy jeden user się zaloguje, czy drugi łączący się jeż just zalogowany
-- [ ] user nie może wyjść ponad swój katalog domowy (parser ścieżek obsługuje i względne i bezwzględne, ale obie muszą być względem katalogu domowego)
+- [ ] czy ktoś może się połączyć do nie swojej sesji
+- [x] user nie może wyjść ponad swój katalog domowy (parser ścieżek obsługuje i względne i bezwzględne, ale obie muszą być względem katalogu domowego)
 - [x] if transfer in data connection doesn't start after eg. 10s -> close data conn
 - [x] co jak nie ma config file (try:)
-- [ ] utwórz brakujące foldery pośrednie /istnieje/nie/nie/target
-- [ ] żeby nie wyszedł ponad nie tylko główny folder ale i folder usera
+- [ ] ~~utwórz brakujące foldery pośrednie (przy tworzeniu katalogów) /istnieje/nie/nie/target~~
+- [x] żeby nie wyszedł ponad nie tylko główny folder ale i folder usera
 - [x] powinien pokazywać ścieżkę jako absolutną ale względem folderu głównego
-- [ ] da się jakoś przez dwukropek dostać?
-- [ ] czy ktoś może się połączyć do nie swojej sesji
-- [ ] specyfikacja mówi jakie MUSZĄ być MODE, STRU, TYPE https://datatracker.ietf.org/doc/html/rfc959#section-5 . TYPE I - image/binary, ASCII do tekstu; STRU wystarczy nam file
+- [ ] da się jakoś przez dwukropek dostać~wyżej?
+- [x] specyfikacja mówi jakie MUSZĄ być MODE, STRU, TYPE https://datatracker.ietf.org/doc/html/rfc959#section-5 . TYPE I - image/binary, ASCII do tekstu; STRU wystarczy nam file
 - [x] NOP polecenie do podtrzymania sesji tylko
 - [x] jak klient się połączy ale nie zaloguje to zamknięcie sesji.
 - [x] tak samo po zalogowaniu ale bez aktywności (tu dłuższy czas)
@@ -32,7 +32,7 @@ Serwer powinien obsługiwać **przynajmniej**:
 - [x] jednego użytkownika z hasłem,
 - [x] użytkownika anonimowego,
 - [x] wysyłanie listy plików,
-- [ ] wysyłanie oraz odbieranie pliku.
+- [x] wysyłanie oraz odbieranie pliku.
 
 W wariancie optymalnym powinien umożliwiać:
 
