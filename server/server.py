@@ -160,7 +160,13 @@ class FTPSession(threading.Thread):
 
         try:
             self.passive_socket.settimeout(DATA_TIMEOUT)
-            self.data_socket, _ = self.passive_socket.accept()
+            self.data_socket, data_address = self.passive_socket.accept()
+            # Check if the IP address of the data connection matches the control connection
+            if data_address[0] != self.address[0]:
+                self.send("425 Data connection IP mismatch.")
+                self.data_socket.close()
+                self.data_socket = None
+                return
         except socket.timeout:
             # Handle the timeout
             print(

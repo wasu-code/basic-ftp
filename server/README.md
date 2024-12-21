@@ -2,12 +2,12 @@
 
 ## Scenariusze testowania
 
-- [ ] co gdy jeden user się zaloguje, czy drugi łączący się jeż just zalogowany
-- [ ] czy ktoś może się połączyć do nie swojej sesji
+- [x] co gdy jeden user się zaloguje, czy drugi łączący się jeż just zalogowany
+- [x] czy ktoś może się połączyć do nie swojej sesji
 - [x] user nie może wyjść ponad swój katalog domowy (parser ścieżek obsługuje i względne i bezwzględne, ale obie muszą być względem katalogu domowego)
 - [x] if transfer in data connection doesn't start after eg. 10s -> close data conn
 - [x] co jak nie ma config file (try:)
-- [ ] ~~utwórz brakujące foldery pośrednie (przy tworzeniu katalogów) /istnieje/nie/nie/target~~
+- [x] ~~utwórz brakujące foldery pośrednie (przy tworzeniu katalogów) /istnieje/nie/nie/target~~
 - [x] żeby nie wyszedł ponad nie tylko główny folder ale i folder usera
 - [x] powinien pokazywać ścieżkę jako absolutną ale względem folderu głównego
 - [x] da się jakoś przez dwukropek dostać~wyżej?
@@ -42,7 +42,7 @@ W wariancie optymalnym powinien umożliwiać:
 - [x] wchodzenie do katalogu (CWD),
 - [x] tworzenie i usuwanie katalogu (MKD, RMD),
 - [x] pobieranie listy plików (LIST),
-- [ ] wysyłanie, pobieranie i usuwanie pliku (STOR, RETR, DELE).
+- [x] wysyłanie, pobieranie i usuwanie pliku (STOR, RETR, DELE).
 
 Konfiguracja serwera może się odbywać z linii poleceń lub za pośrednictwem czytelnego dla człowieka pliku konfiguracyjnego.Konfiguracja powinna umożliwiać:
 
