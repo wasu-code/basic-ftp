@@ -261,6 +261,39 @@ class FTPSession(threading.Thread):
                             except PermissionError:
                                 self.send("550 Permission denied.")
 
+                    case "CDUP":
+                        try:
+                            self.cwd = self.sanitize_path("..")
+                            self.send(
+                                f'250 CDUP command successful. "{self.ftp_path(self.cwd)}" is current directory.'
+                            )
+                        except PermissionError:
+                            self.send("550 Permission denied.")
+
+                    case "MKD":
+                        if not args:
+                            self.send("501 No directory specified.")
+                        else:
+                            try:
+                                path = self.sanitize_path(
+                                    args[0], check_full_path=False
+                                )
+                                path.mkdir(parents=True, exist_ok=True)
+                                self.send(f"257 Directory created: {args[0]}.")
+                            except PermissionError:
+                                self.send("550 Permission denied.")
+
+                    case "RMD":
+                        if not args:
+                            self.send("501 No directory specified.")
+                        else:
+                            try:
+                                path = self.sanitize_path(args[0])
+                                path.rmdir()
+                                self.send(f"250 Directory deleted: {args[0]}.")
+                            except PermissionError:
+                                self.send("550 Permission denied.")
+
                     case "TYPE" | "MODE" | "STRU":
                         # Handle TYPE, MODE, STRU with arguments
                         if args and args[0].upper() == "I":

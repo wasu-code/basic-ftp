@@ -10,7 +10,7 @@
 - [ ] ~~utwórz brakujące foldery pośrednie (przy tworzeniu katalogów) /istnieje/nie/nie/target~~
 - [x] żeby nie wyszedł ponad nie tylko główny folder ale i folder usera
 - [x] powinien pokazywać ścieżkę jako absolutną ale względem folderu głównego
-- [ ] da się jakoś przez dwukropek dostać~wyżej?
+- [x] da się jakoś przez dwukropek dostać~wyżej?
 - [x] specyfikacja mówi jakie MUSZĄ być MODE, STRU, TYPE https://datatracker.ietf.org/doc/html/rfc959#section-5 . TYPE I - image/binary, ASCII do tekstu; STRU wystarczy nam file
 - [x] NOP polecenie do podtrzymania sesji tylko
 - [x] jak klient się połączy ale nie zaloguje to zamknięcie sesji.
@@ -38,9 +38,9 @@ W wariancie optymalnym powinien umożliwiać:
 
 - [x] logowanie użytkowania (USER, PASS),
 - [x] pobieranie bieżącego katalogu (PWD),
-- [ ] zmianę katalogu w górę (CDUP),
+- [x] zmianę katalogu w górę (CDUP),
 - [x] wchodzenie do katalogu (CWD),
-- [ ] tworzenie i usuwanie katalogu (MKD, RMD),
+- [x] tworzenie i usuwanie katalogu (MKD, RMD),
 - [x] pobieranie listy plików (LIST),
 - [ ] wysyłanie, pobieranie i usuwanie pliku (STOR, RETR, DELE).
 
